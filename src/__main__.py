@@ -50,6 +50,29 @@ def load_config(config_path: str = None) -> dict:
             'max_connections': 20,
             'initialize_schema': True,
             'schema_file': 'src/persistence/schema_simple.sql'
+        },
+        # Language-specific settings
+        'language_settings': {
+            'python': {
+                'include_type_hints': True,
+                'format_with_black': True
+            },
+            'javascript': {
+                'use_es6': True,
+                'include_jsdoc': True
+            },
+            'typescript': {
+                'strict_mode': True,
+                'include_interfaces': True
+            },
+            'java': {
+                'package_structure': True,
+                'include_javadoc': True
+            },
+            'go': {
+                'format_with_gofmt': True,
+                'include_godoc': True
+            }
         }
     }
     

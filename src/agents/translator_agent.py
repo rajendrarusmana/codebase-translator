@@ -9,10 +9,15 @@ import logging
 logger = logging.getLogger(__name__)
 
 class TranslatorAgent(BaseAgent):
-    def __init__(self, checkpoint_manager=None, **kwargs):
-        super().__init__(**kwargs)
+    def __init__(self, checkpoint_manager=None, language_settings=None, **kwargs):
+        # Remove language_settings from kwargs before passing to parent
+        kwargs_copy = kwargs.copy()
+        super().__init__(**kwargs_copy)
         self.checkpoint_manager = checkpoint_manager
         self.language_mappings = self._load_language_mappings()
+        # Store language settings from config
+        self.language_settings = language_settings or {}
+        logger.info(f"Translator agent initialized with language settings: {list(self.language_settings.keys())}")
         
     def get_prompt(self) -> ChatPromptTemplate:
         return ChatPromptTemplate.from_messages([
@@ -158,6 +163,85 @@ class TranslatorAgent(BaseAgent):
         return code
     
     def _get_language_requirements(self, language: str) -> str:
+        """Get language-specific requirements from config or defaults."""
+        # Check if language settings are provided in config
+        if language in self.language_settings:
+            settings = self.language_settings[language]
+            requirements = []
+            
+            # Generate requirements based on config settings
+            if language == 'python':
+                if settings.get('include_type_hints', False):
+                    requirements.append("- Use type hints for all functions")
+                if settings.get('format_with_black', False):
+                    requirements.append("- Format code with Black formatter")
+                requirements.extend([
+                    "- Follow PEP 8 style guide",
+                    "- Use f-strings for string formatting",
+                    "- Prefer list comprehensions where appropriate",
+                    "- Use context managers for file operations"
+                ])
+                
+            elif language == 'javascript':
+                if settings.get('use_es6', False):
+                    requirements.append("- Use modern ES6+ syntax")
+                if settings.get('include_jsdoc', False):
+                    requirements.append("- Include JSDoc comments for all functions")
+                requirements.extend([
+                    "- Use const/let instead of var",
+                    "- Use arrow functions where appropriate",
+                    "- Handle async operations with async/await",
+                    "- Include proper error handling"
+                ])
+                
+            elif language == 'typescript':
+                if settings.get('strict_mode', False):
+                    requirements.append("- Use strict typing throughout")
+                if settings.get('include_interfaces', False):
+                    requirements.append("- Define interfaces for all data structures")
+                requirements.extend([
+                    "- Follow TypeScript best practices",
+                    "- Use enums for constant values",
+                    "- Include JSDoc comments"
+                ])
+                
+            elif language == 'java':
+                if settings.get('package_structure', False):
+                    requirements.append("- Use proper package structure")
+                if settings.get('include_javadoc', False):
+                    requirements.append("- Include Javadoc comments for all public methods")
+                requirements.extend([
+                    "- Follow Java naming conventions",
+                    "- Use appropriate access modifiers",
+                    "- Implement proper exception handling",
+                    "- Use generics where applicable",
+                    "- Follow SOLID principles"
+                ])
+                
+            elif language == 'go':
+                if settings.get('format_with_gofmt', False):
+                    requirements.append("- Format code with gofmt")
+                if settings.get('include_godoc', False):
+                    requirements.append("- Include Godoc comments for all exported functions")
+                requirements.extend([
+                    "- Follow Go idioms and conventions",
+                    "- Handle errors explicitly",
+                    "- Use defer for cleanup",
+                    "- Keep interfaces small",
+                    "- Use goroutines for concurrency where specified"
+                ])
+                
+            else:
+                # For other languages, use default requirements
+                requirements.extend([
+                    "- Follow language best practices and conventions",
+                    "- Use appropriate idioms for the target language",
+                    "- Maintain functional equivalence with the source specification"
+                ])
+            
+            return "\n".join(requirements)
+        
+        # Fallback to hardcoded defaults if no config settings
         requirements = {
             'python': """
             - Use type hints for all functions
