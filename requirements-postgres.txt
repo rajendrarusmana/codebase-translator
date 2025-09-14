@@ -1,0 +1,4 @@
+# Optional PostgreSQL persistence dependencies
+# Install with: pip install -r requirements-postgres.txt
+
+asyncpg>=0.28.0
