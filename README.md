@@ -1,10 +1,12 @@
 # Codebase Translator
 
-An advanced LangGraph-based multi-agent framework that performs hierarchical codebase analysis, creates comprehensive language-agnostic specifications, and translates codebases between programming languages while preserving functional equivalence. Features PostgreSQL persistence, intelligent gap filling, and sophisticated project architecture detection.
+An advanced LangGraph-based multi-agent framework that performs hierarchical codebase analysis, creates comprehensive language-agnostic specifications, and translates codebases between programming languages while preserving functional equivalence. Features architectural pattern translation, web-enabled framework research, PostgreSQL persistence, intelligent gap filling, and sophisticated project architecture detection.
 
-## 🚀 Features
+## Features
 
 - **Hierarchical Multi-Agent Architecture**: Specialized agents for project analysis, file classification, function extraction, documentation, and translation
+- **Architectural Pattern Translation**: Automatically detects source frameworks (Sidekiq, Rails, Express, etc.) and generates equivalent target architecture with scaffolding
+- **Web-Enabled Framework Research**: Agents with web browsing capabilities to research current frameworks, best practices, and migration patterns
 - **Advanced Project Analysis**: Detects application type (web API, CLI, microservice, etc.) and architecture patterns (MVC, layered, DDD, etc.)
 - **Intelligent Gap Filling**: Automatically identifies and implements missing functionality in translated code
 - **PostgreSQL Persistence**: Comprehensive database schema for storing project documentation, function analysis, and translation history
@@ -15,7 +17,7 @@ An advanced LangGraph-based multi-agent framework that performs hierarchical cod
 - **Rate Limiting & Retry Logic**: Built-in API rate limiting with exponential backoff for reliable large-scale translations
 - **Extensible**: Easy to add support for new programming languages and analysis agents
 
-## 📋 Architecture
+## Architecture
 
 The framework implements a hierarchical multi-agent architecture with specialized agents for comprehensive codebase analysis:
 
@@ -26,6 +28,13 @@ The framework implements a hierarchical multi-agent architecture with specialize
 - Identifies architecture patterns (MVC, layered, domain-driven, microservices, event-driven, hexagonal, serverless)
 - Analyzes technology stack and entry points
 - Maps key directories and their purposes
+- **Web Project Analyzer**: Enhanced version with web research capabilities for current framework information
+
+#### 1.5. Architecture Translator Agent
+- **Framework-to-Framework Translation**: Detects source frameworks (Sidekiq, Rails, Django, Express, etc.) and maps to equivalent target frameworks
+- **Complete Project Scaffolding**: Generates working project structure with dependencies, configuration files, and base classes
+- **Architectural Pattern Mapping**: Translates architectural concepts (workers → handlers, models → entities, etc.)
+- **Web Architecture Translator**: Enhanced version with web research for latest framework versions and migration patterns
 
 #### 2. Traverser Agent
 - Discovers and catalogs all source files with intelligent filtering
@@ -66,7 +75,7 @@ The framework implements a hierarchical multi-agent architecture with specialize
 - Automatically generates missing functions, classes, and endpoints
 - Ensures seamless integration with existing code
 
-## 🛠️ Installation
+## Installation
 
 ### Basic Installation
 
@@ -110,7 +119,7 @@ export DATABASE_URL="postgresql://user:password@localhost:5432/codebase_translat
 
 3. Initialize database schema (automatic on first run with postgres.enabled: true)
 
-## 📖 Usage
+## Usage
 
 ### Command Line Interface
 
@@ -141,17 +150,20 @@ python -m src PROJECT_ROOT TARGET_LANGUAGE --dry-run --log-level DEBUG
 ### Examples
 
 ```bash
-# Translate a Python web app to JavaScript
-python -m src /path/to/my-web-app javascript
+# Translate a Ruby Sidekiq app to Go (with automatic framework detection)
+python -m src /path/to/sidekiq-app go
 
-# Analyze a Java project without translating
-python -m src /path/to/java-project python --dry-run
+# Translate a Python Django app to JavaScript with Express scaffolding
+python -m src /path/to/django-app javascript
+
+# Analyze a Java Spring project without translating
+python -m src /path/to/spring-project python --dry-run
 
 # Translate with human review and custom output location
 python -m src /path/to/project java --review --output /path/to/translated-code
 
-# Force source language detection and use custom config
-python -m src /path/to/project python --source-language javascript --config myconfig.yaml
+# Use web-enabled agents for latest framework research
+python -m src /path/to/project python --config config-web.yaml
 ```
 
 ### Programmatic Usage
@@ -182,7 +194,7 @@ async def translate_codebase():
 asyncio.run(translate_codebase())
 ```
 
-## 📊 Specification Schema
+## Specification Schema
 
 The framework creates detailed specifications for each module:
 
@@ -226,7 +238,7 @@ The framework creates detailed specifications for each module:
 }
 ```
 
-## 🔧 Configuration
+## Configuration
 
 Create a `config.yaml` file to customize the translation:
 
@@ -267,7 +279,7 @@ human_review: false
 parallel_processing: true
 output_path: "translated"
 
-## 🎯 Supported Languages
+## Supported Languages
 
 **Source Languages:**
 - Python (.py)
@@ -288,25 +300,34 @@ output_path: "translated"
 - Go
 - Rust
 
-## 🔄 Workflow
+## Workflow
 
-1. **Traverse**: Discover and catalog source files
-2. **Document**: Create language-agnostic specifications
-3. **Review** (optional): Human validation of specifications
-4. **Translate**: Generate target language code
-5. **Output**: Save translated files with proper structure
+1. **Project Analysis**: Analyze project structure and detect application type
+2. **Architecture Translation**: Detect source framework and generate target architecture scaffolding
+3. **Traverse**: Discover and catalog source files
+4. **Document**: Create language-agnostic specifications
+5. **Review** (optional): Human validation of specifications
+6. **Translate**: Generate target language code with framework context
+7. **Output**: Save translated files with proper structure and working project setup
 
-## 🧪 Testing
+## Testing
 
-Run the example translation:
+Test the core functionality:
 
 ```bash
+# Test basic translation capabilities
 python examples/run_example.py
+
+# Test web-enabled agents (requires langchain-community)
+python test_web_agents.py
+
+# Test framework detection and scaffolding
+python test_tools_simple.py
 ```
 
-This will translate the sample Python code to JavaScript and show the complete workflow.
+These will demonstrate the complete workflow including architectural pattern detection and framework translation.
 
-## 🤝 Contributing
+## Contributing
 
 1. Fork the repository
 2. Create a feature branch
@@ -314,27 +335,28 @@ This will translate the sample Python code to JavaScript and show the complete w
 4. Update language mappings and requirements
 5. Submit a pull request
 
-## 📜 License
+## License
 
 MIT License - see LICENSE file for details
 
-## 🔗 Dependencies
+## Dependencies
 
 - LangGraph: Multi-agent workflow orchestration
 - LangChain: LLM integration and prompting
+- **LangChain-Community**: Web browsing and search tools for framework research
 - Pydantic: Data validation and settings
 - Tree-sitter: Code parsing (when available)
 - Rich: Beautiful terminal output
 - PyYAML: Configuration management
 - AsyncPG: PostgreSQL database connectivity (optional)
 
-## 🚨 Known Limitations
+## Known Limitations
 
 - Complex metaprogramming may not translate perfectly
 - Some language-specific features may need manual adjustment
 - Large codebases may require API rate limiting considerations
 - Translation quality depends on LLM capability and prompt engineering
 
-## 📞 Support
+## Support
 
 For issues and feature requests, please use the GitHub issue tracker.
