@@ -1,15 +1,17 @@
 """
 Hierarchical workflow orchestrator for the enhanced codebase translation system.
 """
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 from langgraph.graph import StateGraph, END
 from pathlib import Path
 import asyncio
 import logging
 import hashlib
+from uuid import UUID
 
 from ..models.graph_state import OrchestratorState
 from ..agents.project_analyzer_agent import ProjectAnalyzerAgent
+from ..agents.architecture_translator_agent import ArchitectureTranslatorAgent
 from ..agents.traverser_agent import TraverserAgent
 from ..agents.file_classifier_agent import FileClassifierAgent
 from ..agents.function_extractor_agent import FunctionExtractorAgent
@@ -17,8 +19,8 @@ from ..agents.documenter_agent import DocumenterAgent
 from ..agents.translator_agent import TranslatorAgent
 from ..agents.gap_filler_agent import GapFillerAgent
 from ..persistence.agent_checkpoint import CheckpointManager, WorkflowCheckpoint
-from ..utils.project_management import calculate_output_path
 from ..models.specification import ModuleSpecification
+from ..utils.project_management import calculate_output_path
 
 # PostgreSQL persistence is optional - only import if enabled
 try:
@@ -43,7 +45,8 @@ class HierarchicalCodebaseTranslatorWorkflow:
         
         # Initialize agents (will be done in run() with proper checkpoint manager)
         self.project_analyzer = None
-        self.traverser = None  
+        self.architecture_translator = None
+        self.traverser = None
         self.file_classifier = None
         self.function_extractor = None
         self.documenter = None
@@ -66,6 +69,11 @@ class HierarchicalCodebaseTranslatorWorkflow:
         self.project_analyzer = ProjectAnalyzerAgent(
             checkpoint_manager=self.checkpoint_manager,
             **self.config.get('project_analyzer', base_config)
+        )
+
+        self.architecture_translator = ArchitectureTranslatorAgent(
+            checkpoint_manager=self.checkpoint_manager,
+            **self.config.get('architecture_translator', base_config)
         )
         
         self.traverser = TraverserAgent(
@@ -92,6 +100,7 @@ class HierarchicalCodebaseTranslatorWorkflow:
         
         self.translator = TranslatorAgent(
             checkpoint_manager=self.checkpoint_manager,
+            language_settings=self.config.get('language_settings', {}),
             **self.config.get('translator', base_config)
         )
     
@@ -101,6 +110,7 @@ class HierarchicalCodebaseTranslatorWorkflow:
         
         # Add nodes for each phase
         graph.add_node("project_analysis", self._analyze_project)
+        graph.add_node("architecture_translation", self._translate_architecture)
         graph.add_node("traverse_codebase", self._traverse_codebase)
         graph.add_node("classify_files", self._classify_files)
         graph.add_node("extract_functions", self._extract_functions)
@@ -108,9 +118,10 @@ class HierarchicalCodebaseTranslatorWorkflow:
         graph.add_node("create_specifications", self._create_specifications)
         graph.add_node("translate_modules", self._translate_modules)
         graph.add_node("human_review", self._human_review)
-        
+
         # Define workflow edges
-        graph.add_edge("project_analysis", "traverse_codebase")
+        graph.add_edge("project_analysis", "architecture_translation")
+        graph.add_edge("architecture_translation", "traverse_codebase")
         graph.add_edge("traverse_codebase", "classify_files")
         graph.add_edge("classify_files", "extract_functions")
         graph.add_edge("extract_functions", "analyze_functions")
@@ -219,7 +230,7 @@ class HierarchicalCodebaseTranslatorWorkflow:
             # Mark workflow as completed
             workflow_checkpoint.current_phase = "completed"
             workflow_checkpoint.completed_agents = [
-                "project_analyzer", "traverser", "file_classifier",
+                "project_analyzer", "architecture_translator", "traverser", "file_classifier",
                 "function_extractor", "documenter", "translator"
             ]
             workflow_checkpoint.save(self.checkpoint_manager)
@@ -301,10 +312,43 @@ class HierarchicalCodebaseTranslatorWorkflow:
             state['errors'].append({"phase": "project_analysis", "error": str(e)})
         
         return state
-    
+
+    async def _translate_architecture(self, state: OrchestratorState) -> OrchestratorState:
+        """Phase 2: Translate project architecture to target framework."""
+        logger.info("Phase 2: Architecture Translation")
+        state['phase'] = 'architecture_translation'
+
+        try:
+            state = await self.architecture_translator.process(state)
+            arch_translation = state.get('architecture_translation', {})
+            target_framework = arch_translation.get('target_framework', 'unknown')
+            logger.info(f"Selected target framework: {target_framework}")
+
+            # Write scaffolding files to output directory
+            scaffolding_files = arch_translation.get('scaffolding_files', {})
+            if scaffolding_files:
+                output_path = Path(state.get('target_output_path', state.get('output_path', 'translated')))
+                output_path.mkdir(parents=True, exist_ok=True)
+
+                files_written = 0
+                for file_path, content in scaffolding_files.items():
+                    full_path = output_path / file_path
+                    full_path.parent.mkdir(parents=True, exist_ok=True)
+                    with open(full_path, 'w', encoding='utf-8') as f:
+                        f.write(content)
+                    files_written += 1
+
+                logger.info(f"Generated {files_written} scaffolding files in {output_path}")
+
+        except Exception as e:
+            logger.error(f"Architecture translation failed: {e}")
+            state['errors'].append({"phase": "architecture_translation", "error": str(e)})
+
+        return state
+
     async def _traverse_codebase(self, state: OrchestratorState) -> OrchestratorState:
-        """Phase 2: Traverse codebase and analyze folder structure."""
-        logger.info("Phase 2: Codebase Traversal")
+        """Phase 3: Traverse codebase and analyze folder structure."""
+        logger.info("Phase 3: Codebase Traversal")
         state['phase'] = 'traversal'
         
         try:
@@ -317,8 +361,8 @@ class HierarchicalCodebaseTranslatorWorkflow:
         return state
     
     async def _classify_files(self, state: OrchestratorState) -> OrchestratorState:
-        """Phase 3: Classify files by type."""
-        logger.info("Phase 3: File Classification")
+        """Phase 4: Classify files by type."""
+        logger.info("Phase 4: File Classification")
         state['phase'] = 'file_classification'
         
         try:
@@ -332,8 +376,8 @@ class HierarchicalCodebaseTranslatorWorkflow:
         return state
     
     async def _extract_functions(self, state: OrchestratorState) -> OrchestratorState:
-        """Phase 4: Extract functions from logic files."""
-        logger.info("Phase 4: Function Extraction")
+        """Phase 5: Extract functions from logic files."""
+        logger.info("Phase 5: Function Extraction")
         state['phase'] = 'function_extraction'
         
         try:
@@ -347,8 +391,8 @@ class HierarchicalCodebaseTranslatorWorkflow:
         return state
     
     async def _analyze_functions(self, state: OrchestratorState) -> OrchestratorState:
-        """Phase 5: Analyze functions semantically."""
-        logger.info("Phase 5: Function Analysis") 
+        """Phase 6: Analyze functions semantically."""
+        logger.info("Phase 6: Function Analysis") 
         state['phase'] = 'function_analysis'
         
         try:
@@ -364,11 +408,34 @@ class HierarchicalCodebaseTranslatorWorkflow:
         return state
     
     async def _create_specifications(self, state: OrchestratorState) -> OrchestratorState:
-        """Phase 6: Create final codebase specification and save to database."""
-        logger.info("Phase 6: Creating Specifications")
+        """Phase 7: Create final codebase specification and save to database."""
+        logger.info("Phase 7: Creating Specifications")
         state['phase'] = 'specification_creation'
         
         try:
+            # Check if specifications already exist
+            existing_specs = await self._check_existing_specifications(state)
+            if existing_specs:
+                logger.info(f"Using {len(existing_specs)} existing module specifications")
+                state['module_specifications'] = existing_specs
+                state['specifications_ready'] = True
+                
+                # Update project status to indicate reuse
+                project_id = state.get('project_id')
+                if project_id:
+                    try:
+                        from ..persistence.translation_project_repository import translation_project_repo
+                        from datetime import datetime
+                        await translation_project_repo.update_translation_project_status(
+                            UUID(project_id), 'analyzing_reuse'
+                        )
+                    except Exception as e:
+                        logger.warning(f"Failed to update translation project status: {e}")
+                
+                # Save specifications to database (should be no-op since they already exist)
+                await self._save_specifications_to_database(state, existing_specs)
+                return state
+            
             from ..models.specification import ModuleSpecification, DataType, Operation, SideEffect, Dependency, Algorithm, ModuleCall
             
             function_specs = state.get('function_specs', {})
@@ -505,58 +572,56 @@ class HierarchicalCodebaseTranslatorWorkflow:
         
         return state
     
-    async def _save_specifications_to_database(self, state: OrchestratorState, module_specifications: List[ModuleSpecification]):
-        """Save module specifications to database in a non-blocking manner."""
+    async def _check_existing_specifications(self, state: OrchestratorState) -> Optional[List[ModuleSpecification]]:
+        """Check if module specifications already exist for this project."""
         try:
-            # Initialize database if not already done
             postgres_config = self.config.get('postgres', {})
-            if postgres_config.get('enabled', False) and POSTGRES_AVAILABLE:
-                if not db_manager.connection:
-                    logger.info("Initializing PostgreSQL connection...")
-                    await db_manager.initialize(postgres_config)
+            if not (postgres_config.get('enabled', False) and POSTGRES_AVAILABLE):
+                return None
                 
-                # Save project specification
-                project_spec = state.get('project_spec')
-                if project_spec:
-                    logger.info("Saving project specification...")
-                    project_id = await documentation_repo.save_project(project_spec, self.workflow_id)
-                    state['project_id'] = str(project_id)
-                    
-                    # Save folder structure
-                    folder_structure = state.get('folder_structure')
-                    folder_id = project_id  # Default to project_id if no folder structure
-                    if folder_structure:
-                        logger.info("Saving folder structure...")
-                        folder_id = await documentation_repo.save_folder_structure(project_id, folder_structure)
-                    
-                    # Save file classifications
-                    file_specs = state.get('file_specs', [])
-                    if file_specs:
-                        # Associate all files with the root folder
-                        await documentation_repo.save_files(project_id, folder_id, file_specs)
-                    
-                    # Save function analysis
-                    function_specs = state.get('function_specs', {})
-                    if function_specs:
-                        logger.info(f"Saving function analysis for {len(function_specs)} files...")
-                        await documentation_repo.save_function_analysis(project_id, function_specs)
-                    
-                    logger.info(f"Documentation saved to PostgreSQL with project ID: {project_id}")
-                else:
-                    logger.warning("No project specification found - skipping database save")
-            elif postgres_config.get('enabled', False) and not POSTGRES_AVAILABLE:
-                logger.warning("PostgreSQL persistence enabled but asyncpg not available. Install with: pip install asyncpg")
-            else:
-                logger.info("PostgreSQL persistence disabled in configuration")
+            if not db_manager.connection:
+                logger.info("Initializing PostgreSQL connection...")
+                await db_manager.initialize(postgres_config)
+            
+            # Get project ID
+            project_id = state.get('project_id')
+            if not project_id:
+                # Try to get existing project record
+                from ..persistence.translation_project_repository import translation_project_repo
+                project_root = state.get('root_path', '')
+                target_language = state.get('target_language', '')
                 
+                if project_root and target_language:
+                    try:
+                        project_record = await translation_project_repo.get_translation_project(
+                            project_root, target_language
+                        )
+                        if project_record:
+                            project_id = str(project_record['id'])
+                            state['project_id'] = project_id
+                    except Exception as e:
+                        logger.warning(f"Failed to get existing translation project: {e}")
+                        return None
+            
+            if project_id:
+                # Check for existing module specifications
+                from ..persistence.repositories import module_spec_repo
+                try:
+                    existing_specs = await module_spec_repo.get_module_specifications(UUID(project_id))
+                    if existing_specs:
+                        logger.info(f"Found {len(existing_specs)} existing module specifications")
+                        return existing_specs
+                except Exception as e:
+                    logger.warning(f"Failed to retrieve existing module specifications: {e}")
+                    
         except Exception as e:
-            logger.warning(f"Non-critical database saving failed: {e}")
-            # Continue execution even if database saving fails
-            state['errors'].append({"phase": "database_saving", "error": str(e)})
+            logger.warning(f"Error checking for existing specifications: {e}")
+            
+        return None
     
     async def _translate_modules(self, state: OrchestratorState) -> OrchestratorState:
-        """Phase 7: Translate modules using hierarchical specs and save to files."""
-        logger.info("Phase 7: Module Translation")
+        """Phase 8: Translate modules using hierarchical specs and save to files."""
+        logger.info("Phase 8: Module Translation")
         state['phase'] = 'translation'
         
         if state.get('config', {}).get('dry_run'):
@@ -679,6 +744,57 @@ class HierarchicalCodebaseTranslatorWorkflow:
             errors.extend(final_state['translation_state'].get('errors', []))
         
         return errors
+    
+    async def _save_specifications_to_database(self, state: OrchestratorState, module_specifications: List[ModuleSpecification]):
+        """Save module specifications to database in a non-blocking manner."""
+        try:
+            # Initialize database if not already done
+            postgres_config = self.config.get('postgres', {})
+            if postgres_config.get('enabled', False) and POSTGRES_AVAILABLE:
+                if not db_manager.connection:
+                    logger.info("Initializing PostgreSQL connection...")
+                    await db_manager.initialize(postgres_config)
+                
+                # Save translation project record if not already done
+                project_id = state.get('project_id')
+                if not project_id:
+                    # Create translation project record
+                    from ..persistence.translation_project_repository import translation_project_repo
+                    project_root = state.get('root_path', '')
+                    target_language = state.get('target_language', '')
+                    output_path = state.get('target_output_path', './translated')
+                    
+                    if project_root and target_language:
+                        try:
+                            project_id = await translation_project_repo.create_translation_project(
+                                project_root, target_language, output_path
+                            )
+                            state['project_id'] = str(project_id)
+                            logger.info(f"Created translation project record with ID: {project_id}")
+                        except Exception as e:
+                            logger.warning(f"Failed to create translation project record: {e}")
+                            return
+                
+                # Save module specifications
+                if project_id and module_specifications:
+                    try:
+                        from ..persistence.repositories import module_spec_repo
+                        spec_ids = await module_spec_repo.save_module_specifications(
+                            UUID(project_id), module_specifications
+                        )
+                        logger.info(f"Saved {len(spec_ids)} module specifications to database")
+                    except Exception as e:
+                        logger.warning(f"Failed to save module specifications: {e}")
+                
+            elif postgres_config.get('enabled', False) and not POSTGRES_AVAILABLE:
+                logger.warning("PostgreSQL persistence enabled but asyncpg not available. Install with: pip install asyncpg")
+            else:
+                logger.info("PostgreSQL persistence disabled in configuration")
+                
+        except Exception as e:
+            logger.warning(f"Non-critical database saving failed: {e}")
+            # Continue execution even if database saving fails
+            state['errors'].append({"phase": "database_saving", "error": str(e)})
     
     def get_workflow_status(self) -> Dict[str, Any]:
         """Get current workflow status."""

@@ -9,10 +9,15 @@ import logging
 logger = logging.getLogger(__name__)
 
 class TranslatorAgent(BaseAgent):
-    def __init__(self, checkpoint_manager=None, **kwargs):
-        super().__init__(**kwargs)
+    def __init__(self, checkpoint_manager=None, language_settings=None, **kwargs):
+        # Remove language_settings from kwargs before passing to parent
+        kwargs_copy = kwargs.copy()
+        super().__init__(**kwargs_copy)
         self.checkpoint_manager = checkpoint_manager
         self.language_mappings = self._load_language_mappings()
+        # Store language settings from config
+        self.language_settings = language_settings or {}
+        logger.info(f"Translator agent initialized with language settings: {list(self.language_settings.keys())}")
         
     def get_prompt(self) -> ChatPromptTemplate:
         return ChatPromptTemplate.from_messages([
@@ -33,13 +38,16 @@ class TranslatorAgent(BaseAgent):
             
             Return the complete, working code for the module."""),
             ("human", """Translate this specification to {target_language}:
-            
+
             Specification:
             {specification}
-            
+
+            Target Framework Context:
+            {framework_context}
+
             Language-specific requirements:
             {language_requirements}
-            
+
             Generate the complete code:""")
         ])
     
@@ -115,6 +123,7 @@ class TranslatorAgent(BaseAgent):
     ) -> str:
         
         language_requirements = self._get_language_requirements(target_language)
+        framework_context = self._get_framework_context(state)
 
         # Ensure spec is valid before serialization
         if not spec:
@@ -124,7 +133,7 @@ class TranslatorAgent(BaseAgent):
             spec_json = spec.model_dump_json(indent=2)
         except Exception as e:
             raise ValueError(f"Failed to serialize specification for {spec.module_name}: {e}")
-        
+
         prompt = self.get_prompt()
         if not prompt:
             raise ValueError(f"Failed to get prompt for {spec.module_name}")
@@ -132,10 +141,11 @@ class TranslatorAgent(BaseAgent):
         chain = prompt | self.llm
         if not chain:
             raise ValueError(f"Failed to create LLM chain for {spec.module_name}")
-        
+
         response = await chain.ainvoke({
             "target_language": target_language,
             "specification": spec_json,
+            "framework_context": framework_context,
             "language_requirements": language_requirements
         })
 
@@ -158,6 +168,85 @@ class TranslatorAgent(BaseAgent):
         return code
     
     def _get_language_requirements(self, language: str) -> str:
+        """Get language-specific requirements from config or defaults."""
+        # Check if language settings are provided in config
+        if language in self.language_settings:
+            settings = self.language_settings[language]
+            requirements = []
+            
+            # Generate requirements based on config settings
+            if language == 'python':
+                if settings.get('include_type_hints', False):
+                    requirements.append("- Use type hints for all functions")
+                if settings.get('format_with_black', False):
+                    requirements.append("- Format code with Black formatter")
+                requirements.extend([
+                    "- Follow PEP 8 style guide",
+                    "- Use f-strings for string formatting",
+                    "- Prefer list comprehensions where appropriate",
+                    "- Use context managers for file operations"
+                ])
+                
+            elif language == 'javascript':
+                if settings.get('use_es6', False):
+                    requirements.append("- Use modern ES6+ syntax")
+                if settings.get('include_jsdoc', False):
+                    requirements.append("- Include JSDoc comments for all functions")
+                requirements.extend([
+                    "- Use const/let instead of var",
+                    "- Use arrow functions where appropriate",
+                    "- Handle async operations with async/await",
+                    "- Include proper error handling"
+                ])
+                
+            elif language == 'typescript':
+                if settings.get('strict_mode', False):
+                    requirements.append("- Use strict typing throughout")
+                if settings.get('include_interfaces', False):
+                    requirements.append("- Define interfaces for all data structures")
+                requirements.extend([
+                    "- Follow TypeScript best practices",
+                    "- Use enums for constant values",
+                    "- Include JSDoc comments"
+                ])
+                
+            elif language == 'java':
+                if settings.get('package_structure', False):
+                    requirements.append("- Use proper package structure")
+                if settings.get('include_javadoc', False):
+                    requirements.append("- Include Javadoc comments for all public methods")
+                requirements.extend([
+                    "- Follow Java naming conventions",
+                    "- Use appropriate access modifiers",
+                    "- Implement proper exception handling",
+                    "- Use generics where applicable",
+                    "- Follow SOLID principles"
+                ])
+                
+            elif language == 'go':
+                if settings.get('format_with_gofmt', False):
+                    requirements.append("- Format code with gofmt")
+                if settings.get('include_godoc', False):
+                    requirements.append("- Include Godoc comments for all exported functions")
+                requirements.extend([
+                    "- Follow Go idioms and conventions",
+                    "- Handle errors explicitly",
+                    "- Use defer for cleanup",
+                    "- Keep interfaces small",
+                    "- Use goroutines for concurrency where specified"
+                ])
+                
+            else:
+                # For other languages, use default requirements
+                requirements.extend([
+                    "- Follow language best practices and conventions",
+                    "- Use appropriate idioms for the target language",
+                    "- Maintain functional equivalence with the source specification"
+                ])
+            
+            return "\n".join(requirements)
+        
+        # Fallback to hardcoded defaults if no config settings
         requirements = {
             'python': """
             - Use type hints for all functions
@@ -214,7 +303,54 @@ class TranslatorAgent(BaseAgent):
             """
         }
         return requirements.get(language, "Follow language best practices and conventions")
-    
+
+    def _get_framework_context(self, state: Dict[str, Any]) -> str:
+        """Extract framework context from architecture translation."""
+        arch_translation = state.get('architecture_translation', {})
+
+        if not arch_translation:
+            return "No specific framework context available."
+
+        context_parts = []
+
+        # Target framework info
+        target_framework = arch_translation.get('target_framework', 'unknown')
+        context_parts.append(f"Target Framework: {target_framework}")
+
+        # Framework mappings for this translation
+        mappings = arch_translation.get('architectural_mappings', {})
+        if mappings:
+            context_parts.append("Pattern Mappings:")
+            for source_pattern, target_pattern in mappings.items():
+                context_parts.append(f"  {source_pattern} → {target_pattern}")
+
+        # Dependencies available
+        dependencies = arch_translation.get('dependencies', [])
+        if dependencies:
+            context_parts.append("Available Dependencies:")
+            for dep in dependencies[:5]:  # Limit to first 5
+                dep_name = dep.get('name', 'unknown') if isinstance(dep, dict) else str(dep)
+                purpose = dep.get('purpose', '') if isinstance(dep, dict) else ''
+                if purpose:
+                    context_parts.append(f"  {dep_name} - {purpose}")
+                else:
+                    context_parts.append(f"  {dep_name}")
+
+        # Migration notes
+        notes = arch_translation.get('migration_notes', [])
+        if notes:
+            context_parts.append("Migration Notes:")
+            for note in notes[:3]:  # Limit to first 3 notes
+                context_parts.append(f"  - {note}")
+
+        # Instructions based on framework
+        if target_framework:
+            context_parts.append(f"\nIMPORTANT: Generate code that integrates with {target_framework} framework.")
+            context_parts.append("Use framework-specific patterns, base classes, and conventions.")
+            context_parts.append("Ensure the translated code works with the generated project scaffolding.")
+
+        return "\n".join(context_parts)
+
     def _generate_imports(
         self, 
         spec: ModuleSpecification, 
@@ -378,3 +514,63 @@ class TranslatorAgent(BaseAgent):
                 }
             }
         }
+    def _get_architectural_context(self, spec: ModuleSpecification, state: Dict[str, Any]) -> Dict[str, Any]:
+        """Extract architectural context from module specification and workflow state."""
+        context = {
+            "architectural_context": None,
+            "deployment_pattern": None,
+            "scaling_characteristics": None,
+            "failure_tolerance": None,
+            "infrastructure_assumptions": [],
+            "domain_context": None
+        }
+        
+        # Extract from module specification if available
+        if hasattr(spec, 'architectural_context') and spec.architectural_context:
+            context["architectural_context"] = spec.architectural_context
+            
+        if hasattr(spec, 'deployment_pattern') and spec.deployment_pattern:
+            context["deployment_pattern"] = spec.deployment_pattern
+            
+        if hasattr(spec, 'scaling_characteristics') and spec.scaling_characteristics:
+            context["scaling_characteristics"] = spec.scaling_characteristics
+            
+        if hasattr(spec, 'failure_tolerance') and spec.failure_tolerance:
+            context["failure_tolerance"] = spec.failure_tolerance
+            
+        if hasattr(spec, 'infrastructure_assumptions') and spec.infrastructure_assumptions:
+            context["infrastructure_assumptions"] = spec.infrastructure_assumptions
+            
+        if hasattr(spec, 'domain_context') and spec.domain_context:
+            context["domain_context"] = spec.domain_context
+            
+        # Extract from workflow state if available
+        if state.get('project_spec'):
+            project_spec = state['project_spec']
+            if hasattr(project_spec, 'architectural_context') and project_spec.architectural_context:
+                context["architectural_context"] = project_spec.architectural_context
+                
+        return context
+
+    def _generate_context_guidance(self, architectural_context: Dict[str, Any], target_language: str) -> str:
+        """Generate context-aware guidance for translation based on architectural patterns."""
+        if not architectural_context or not any(architectural_context.values()):
+            return "No specific architectural context detected."
+        
+        guidance_parts = ["ARCHITECTURAL CONTEXT GUIDANCE:"]
+        
+        # Background job guidance
+        if architectural_context.get("architectural_context") == "background_job":
+            guidance_parts.append("BACKGROUND JOB PATTERN DETECTED:")
+            guidance_parts.append("- Use appropriate async/concurrent processing patterns")
+            guidance_parts.append("- Implement proper queue system integration")
+            guidance_parts.append("- Include retry mechanisms with exponential backoff")
+            guidance_parts.append("- Add graceful shutdown handling")
+            guidance_parts.append("- Include health monitoring and logging")
+            
+            if "redis" in architectural_context.get("infrastructure_assumptions", []):
+                guidance_parts.append("- Redis queue system detected")
+                if target_language == "go":
+                    guidance_parts.append("- Recommended Go libraries: github.com/go-redis/redis/v8")
+                    
+        return "\n".join(guidance_parts)

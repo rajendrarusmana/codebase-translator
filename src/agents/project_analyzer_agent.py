@@ -25,7 +25,7 @@ class ProjectAnalyzerAgent(BaseAgent):
     
     def get_prompt(self) -> ChatPromptTemplate:
         return ChatPromptTemplate.from_messages([
-            ("system", """You are a software architecture expert analyzing a codebase to determine its type and structure.
+            ("system", """You are a software architecture expert analyzing a codebase to determine its type, structure, and frameworks.
 
             Analyze the provided project information and return ONLY valid JSON:
 
@@ -34,6 +34,15 @@ class ProjectAnalyzerAgent(BaseAgent):
               "architecture": "mvc|layered|domain_driven|microservices|event_driven|hexagonal|serverless|monolithic|unknown",
               "description": "Brief description of what this application does",
               "technology_stack": ["framework1", "database1", "tool1"],
+              "primary_framework": {{
+                "name": "detected_framework_name",
+                "version": "detected_version_or_null",
+                "category": "worker|web_api|web_full|cli|orm|testing|microservice|unknown"
+              }},
+              "frameworks_detected": [
+                {{"name": "framework_name", "category": "category", "confidence": 0.0_to_1.0}},
+                {{"name": "another_framework", "category": "category", "confidence": 0.0_to_1.0}}
+              ],
               "entry_points": ["main.py", "server.js", "index.ts"],
               "key_directories": {{
                 "handlers": "path/to/handlers",
@@ -52,6 +61,37 @@ class ProjectAnalyzerAgent(BaseAgent):
               }}
             }}
 
+            FRAMEWORK DETECTION PATTERNS:
+
+            Look for these patterns to identify frameworks and their categories:
+
+            Worker/Background Job Patterns:
+            - Job queue libraries in dependencies (sidekiq, celery, bull, resque, etc.)
+            - Worker classes that inherit from framework base classes
+            - Job/task decorators (@app.task, include Sidekiq::Worker, etc.)
+            - Queue-related imports and Redis/message broker usage
+
+            Web Framework Patterns:
+            - HTTP routing libraries and route definitions
+            - Controller/handler classes and REST endpoint patterns
+            - Web server startup code and middleware configuration
+            - Template engines and static file serving
+
+            CLI Framework Patterns:
+            - Command-line parsing libraries (cobra, click, thor, commander, etc.)
+            - Argument parsing and subcommand definitions
+            - Console applications without web servers
+
+            ORM/Database Patterns:
+            - Database model definitions and schema files
+            - Migration files and database configuration
+            - ORM imports (ActiveRecord, SQLAlchemy, Mongoose, GORM, etc.)
+
+            Testing Framework Patterns:
+            - Test file naming conventions (*_test.*, test_*.*, *.spec.*)
+            - Testing library imports (RSpec, pytest, Jest, etc.)
+            - Test configuration and setup files
+
             PROJECT TYPE DETECTION RULES:
             - web_api: Has HTTP routes, controllers, REST/GraphQL endpoints
             - cli: Has command parsers, console interface, no web server
@@ -67,7 +107,8 @@ class ProjectAnalyzerAgent(BaseAgent):
             - event_driven: Event handlers, message bus, pub/sub
             - hexagonal: Ports and adapters pattern
 
-            JSON FORMATTING: Use double quotes, no trailing commas, escape special characters."""),
+            CRITICAL: Analyze file contents, not just names. Look for import statements, class inheritance,
+            and framework-specific patterns to determine frameworks with high confidence."""),
             
             ("human", """Analyze this project structure:
 

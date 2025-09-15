@@ -88,15 +88,16 @@ class PostgreSQLConnection:
             statements = [stmt.strip() for stmt in schema_sql.split(';') if stmt.strip()]
             
             async with self.pool.acquire() as conn:
-                async with conn.transaction():
-                    for statement in statements:
-                        # Skip comments and empty statements
-                        if statement and not statement.startswith('--') and not statement.startswith('/*'):
-                            try:
+                for statement in statements:
+                    # Skip comments and empty statements
+                    if statement and not statement.startswith('--') and not statement.startswith('/*'):
+                        try:
+                            # Execute each statement in its own transaction
+                            async with conn.transaction():
                                 await conn.execute(statement)
-                            except Exception as e:
-                                logger.warning(f"Failed to execute statement: {statement[:100]}... Error: {e}")
-                                # Continue with other statements
+                        except Exception as e:
+                            logger.warning(f"Failed to execute statement: {statement[:100]}... Error: {e}")
+                            # Continue with other statements
             
             logger.info(f"Database schema initialized successfully from: {schema_path}")
             
