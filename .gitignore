@@ -147,8 +147,6 @@ dmypy.json
 .pyre/
 
 # Configuration files
-config*.yaml
-config*.yml
 
 # Checkpoint files
 .codebase_translator/

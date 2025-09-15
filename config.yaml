@@ -1,0 +1,88 @@
+# Codebase Translator Configuration
+
+# Agent configurations
+# OpenRouter models can be specified as:
+# - "openrouter/meta-llama/llama-3.1-8b-instruct" 
+# - "or:meta-llama/llama-3.1-70b-instruct"
+# - Any model identifier from https://openrouter.ai/models
+
+traverser:
+  model_name: "openrouter/qwen/qwen3-coder-30b-a3b-instruct"  # Working Claude 3.5 Sonnet
+  temperature: 0.0
+
+documenter:
+  model_name: "openrouter/qwen/qwen3-coder-30b-a3b-instruct"  # Best available for semantic analysis
+  temperature: 0.0
+
+translator:
+  model_name: "openrouter/qwen/qwen3-coder-30b-a3b-instruct"  # Best available for code translation
+  temperature: 0.1
+
+# Workflow settings
+human_review: false
+parallel_processing: true
+output_path: "translated"  # Default output root directory
+output_root: "translated"  # Root directory for organized project translations (same as output_path for backward compatibility)
+
+# Rate Limiting Configuration
+rate_limiting:
+  max_concurrent_requests: 2  # Reduce concurrent API calls
+  requests_per_minute: 10     # Limit total requests per minute
+  batch_delay_seconds: 2      # Delay between batches
+  retry_delay_seconds: 5      # Initial retry delay (exponential backoff)
+  max_retries: 3              # Maximum retry attempts
+  max_tokens_per_request: 2000  # Limit output tokens per request
+
+# PostgreSQL Database Configuration
+postgres:
+  enabled: true  # Set to true to enable PostgreSQL persistence
+  url: "postgresql://postgres:post@localhost:5432/codebase_translator"
+  min_connections: 5
+  max_connections: 20
+  initialize_schema: true
+  schema_file: "src/persistence/schema_minimal.sql"
+
+# File processing settings
+max_file_size: 1048576  # 1MB in bytes
+supported_extensions:
+  - ".py"
+  - ".js"
+  - ".ts" 
+  - ".java"
+  - ".go"
+  - ".rs"
+  - ".cpp"
+  - ".c"
+
+ignore_patterns:
+  - "__pycache__"
+  - ".git"
+  - "node_modules"
+  - ".venv"
+  - "venv"
+  - "dist"
+  - "build"
+  - "*.pyc"
+  - "*.pyo"
+
+# Language-specific settings
+language_settings:
+  python:
+    include_type_hints: true
+    format_with_black: true
+  
+  javascript:
+    use_es6: true
+    include_jsdoc: true
+  
+  typescript:
+    strict_mode: true
+    include_interfaces: true
+  
+  java:
+    package_structure: true
+    include_javadoc: true
+  
+  go:
+    format_with_gofmt: true
+    include_godoc: true
