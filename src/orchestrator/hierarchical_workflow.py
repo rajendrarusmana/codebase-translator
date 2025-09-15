@@ -11,6 +11,7 @@ from uuid import UUID
 
 from ..models.graph_state import OrchestratorState
 from ..agents.project_analyzer_agent import ProjectAnalyzerAgent
+from ..agents.architecture_translator_agent import ArchitectureTranslatorAgent
 from ..agents.traverser_agent import TraverserAgent
 from ..agents.file_classifier_agent import FileClassifierAgent
 from ..agents.function_extractor_agent import FunctionExtractorAgent
@@ -44,7 +45,8 @@ class HierarchicalCodebaseTranslatorWorkflow:
         
         # Initialize agents (will be done in run() with proper checkpoint manager)
         self.project_analyzer = None
-        self.traverser = None  
+        self.architecture_translator = None
+        self.traverser = None
         self.file_classifier = None
         self.function_extractor = None
         self.documenter = None
@@ -67,6 +69,11 @@ class HierarchicalCodebaseTranslatorWorkflow:
         self.project_analyzer = ProjectAnalyzerAgent(
             checkpoint_manager=self.checkpoint_manager,
             **self.config.get('project_analyzer', base_config)
+        )
+
+        self.architecture_translator = ArchitectureTranslatorAgent(
+            checkpoint_manager=self.checkpoint_manager,
+            **self.config.get('architecture_translator', base_config)
         )
         
         self.traverser = TraverserAgent(
@@ -103,6 +110,7 @@ class HierarchicalCodebaseTranslatorWorkflow:
         
         # Add nodes for each phase
         graph.add_node("project_analysis", self._analyze_project)
+        graph.add_node("architecture_translation", self._translate_architecture)
         graph.add_node("traverse_codebase", self._traverse_codebase)
         graph.add_node("classify_files", self._classify_files)
         graph.add_node("extract_functions", self._extract_functions)
@@ -110,9 +118,10 @@ class HierarchicalCodebaseTranslatorWorkflow:
         graph.add_node("create_specifications", self._create_specifications)
         graph.add_node("translate_modules", self._translate_modules)
         graph.add_node("human_review", self._human_review)
-        
+
         # Define workflow edges
-        graph.add_edge("project_analysis", "traverse_codebase")
+        graph.add_edge("project_analysis", "architecture_translation")
+        graph.add_edge("architecture_translation", "traverse_codebase")
         graph.add_edge("traverse_codebase", "classify_files")
         graph.add_edge("classify_files", "extract_functions")
         graph.add_edge("extract_functions", "analyze_functions")
@@ -221,7 +230,7 @@ class HierarchicalCodebaseTranslatorWorkflow:
             # Mark workflow as completed
             workflow_checkpoint.current_phase = "completed"
             workflow_checkpoint.completed_agents = [
-                "project_analyzer", "traverser", "file_classifier",
+                "project_analyzer", "architecture_translator", "traverser", "file_classifier",
                 "function_extractor", "documenter", "translator"
             ]
             workflow_checkpoint.save(self.checkpoint_manager)
@@ -303,10 +312,43 @@ class HierarchicalCodebaseTranslatorWorkflow:
             state['errors'].append({"phase": "project_analysis", "error": str(e)})
         
         return state
-    
+
+    async def _translate_architecture(self, state: OrchestratorState) -> OrchestratorState:
+        """Phase 2: Translate project architecture to target framework."""
+        logger.info("Phase 2: Architecture Translation")
+        state['phase'] = 'architecture_translation'
+
+        try:
+            state = await self.architecture_translator.process(state)
+            arch_translation = state.get('architecture_translation', {})
+            target_framework = arch_translation.get('target_framework', 'unknown')
+            logger.info(f"Selected target framework: {target_framework}")
+
+            # Write scaffolding files to output directory
+            scaffolding_files = arch_translation.get('scaffolding_files', {})
+            if scaffolding_files:
+                output_path = Path(state.get('target_output_path', state.get('output_path', 'translated')))
+                output_path.mkdir(parents=True, exist_ok=True)
+
+                files_written = 0
+                for file_path, content in scaffolding_files.items():
+                    full_path = output_path / file_path
+                    full_path.parent.mkdir(parents=True, exist_ok=True)
+                    with open(full_path, 'w', encoding='utf-8') as f:
+                        f.write(content)
+                    files_written += 1
+
+                logger.info(f"Generated {files_written} scaffolding files in {output_path}")
+
+        except Exception as e:
+            logger.error(f"Architecture translation failed: {e}")
+            state['errors'].append({"phase": "architecture_translation", "error": str(e)})
+
+        return state
+
     async def _traverse_codebase(self, state: OrchestratorState) -> OrchestratorState:
-        """Phase 2: Traverse codebase and analyze folder structure."""
-        logger.info("Phase 2: Codebase Traversal")
+        """Phase 3: Traverse codebase and analyze folder structure."""
+        logger.info("Phase 3: Codebase Traversal")
         state['phase'] = 'traversal'
         
         try:
@@ -319,8 +361,8 @@ class HierarchicalCodebaseTranslatorWorkflow:
         return state
     
     async def _classify_files(self, state: OrchestratorState) -> OrchestratorState:
-        """Phase 3: Classify files by type."""
-        logger.info("Phase 3: File Classification")
+        """Phase 4: Classify files by type."""
+        logger.info("Phase 4: File Classification")
         state['phase'] = 'file_classification'
         
         try:
@@ -334,8 +376,8 @@ class HierarchicalCodebaseTranslatorWorkflow:
         return state
     
     async def _extract_functions(self, state: OrchestratorState) -> OrchestratorState:
-        """Phase 4: Extract functions from logic files."""
-        logger.info("Phase 4: Function Extraction")
+        """Phase 5: Extract functions from logic files."""
+        logger.info("Phase 5: Function Extraction")
         state['phase'] = 'function_extraction'
         
         try:
@@ -349,8 +391,8 @@ class HierarchicalCodebaseTranslatorWorkflow:
         return state
     
     async def _analyze_functions(self, state: OrchestratorState) -> OrchestratorState:
-        """Phase 5: Analyze functions semantically."""
-        logger.info("Phase 5: Function Analysis") 
+        """Phase 6: Analyze functions semantically."""
+        logger.info("Phase 6: Function Analysis") 
         state['phase'] = 'function_analysis'
         
         try:
@@ -366,8 +408,8 @@ class HierarchicalCodebaseTranslatorWorkflow:
         return state
     
     async def _create_specifications(self, state: OrchestratorState) -> OrchestratorState:
-        """Phase 6: Create final codebase specification and save to database."""
-        logger.info("Phase 6: Creating Specifications")
+        """Phase 7: Create final codebase specification and save to database."""
+        logger.info("Phase 7: Creating Specifications")
         state['phase'] = 'specification_creation'
         
         try:
@@ -578,8 +620,8 @@ class HierarchicalCodebaseTranslatorWorkflow:
         return None
     
     async def _translate_modules(self, state: OrchestratorState) -> OrchestratorState:
-        """Phase 7: Translate modules using hierarchical specs and save to files."""
-        logger.info("Phase 7: Module Translation")
+        """Phase 8: Translate modules using hierarchical specs and save to files."""
+        logger.info("Phase 8: Module Translation")
         state['phase'] = 'translation'
         
         if state.get('config', {}).get('dry_run'):

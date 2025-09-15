@@ -138,6 +138,11 @@ class ProjectSpecification(BaseModel):
     primary_language: str
     languages_used: List[str] = Field(default_factory=list)
     technology_stack: List[str] = Field(default_factory=list)
+    # Enhanced infrastructure awareness (NEW!)
+    infrastructure_assumptions: List[str] = Field(default_factory=list)
+    queuing_systems: List[str] = Field(default_factory=list)
+    deployment_targets: List[str] = Field(default_factory=list)
+    external_services: List[str] = Field(default_factory=list)
     entry_points: List[str] = Field(default_factory=list)
     folder_structure: FolderSpecification
     dependencies: Dict[str, str] = Field(default_factory=dict)  # package -> version

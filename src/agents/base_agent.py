@@ -3,6 +3,7 @@ from typing import Any, Dict, Optional, List
 from langchain_core.language_models import BaseChatModel
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import JsonOutputParser
+from langchain_core.tools import BaseTool
 from langchain_openai import ChatOpenAI
 from langchain_anthropic import ChatAnthropic
 import logging
@@ -20,13 +21,24 @@ class BaseAgent(ABC):
         llm: Optional[BaseChatModel] = None,
         model_name: str = "gpt-4",
         temperature: float = 0.0,
-        config: Optional[Dict[str, Any]] = None
+        config: Optional[Dict[str, Any]] = None,
+        tools: Optional[List[BaseTool]] = None
     ):
         self.config = config or {}
         self.rate_limit_config = self.config.get('rate_limiting', {})
         self.llm = llm or self._create_llm(model_name, temperature)
         self.parser = JsonOutputParser()
         self.request_times = []  # Track request timestamps for rate limiting
+        self.tools = tools or []
+
+        # Bind tools to LLM if provided and LLM supports it
+        if self.tools and hasattr(self.llm, 'bind_tools'):
+            try:
+                self.llm = self.llm.bind_tools(self.tools)
+                logger.info(f"[{self.__class__.__name__}] Bound {len(self.tools)} tools to LLM")
+            except Exception as e:
+                logger.warning(f"[{self.__class__.__name__}] Failed to bind tools: {e}")
+                # Continue without tools rather than failing
         
     async def _execute_with_retry(self, func: Callable, *args, **kwargs) -> Any:
         """Execute function with exponential backoff retry on rate limit errors."""

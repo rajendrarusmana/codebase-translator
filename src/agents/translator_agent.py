@@ -38,13 +38,16 @@ class TranslatorAgent(BaseAgent):
             
             Return the complete, working code for the module."""),
             ("human", """Translate this specification to {target_language}:
-            
+
             Specification:
             {specification}
-            
+
+            Target Framework Context:
+            {framework_context}
+
             Language-specific requirements:
             {language_requirements}
-            
+
             Generate the complete code:""")
         ])
     
@@ -120,6 +123,7 @@ class TranslatorAgent(BaseAgent):
     ) -> str:
         
         language_requirements = self._get_language_requirements(target_language)
+        framework_context = self._get_framework_context(state)
 
         # Ensure spec is valid before serialization
         if not spec:
@@ -129,7 +133,7 @@ class TranslatorAgent(BaseAgent):
             spec_json = spec.model_dump_json(indent=2)
         except Exception as e:
             raise ValueError(f"Failed to serialize specification for {spec.module_name}: {e}")
-        
+
         prompt = self.get_prompt()
         if not prompt:
             raise ValueError(f"Failed to get prompt for {spec.module_name}")
@@ -137,10 +141,11 @@ class TranslatorAgent(BaseAgent):
         chain = prompt | self.llm
         if not chain:
             raise ValueError(f"Failed to create LLM chain for {spec.module_name}")
-        
+
         response = await chain.ainvoke({
             "target_language": target_language,
             "specification": spec_json,
+            "framework_context": framework_context,
             "language_requirements": language_requirements
         })
 
@@ -298,7 +303,54 @@ class TranslatorAgent(BaseAgent):
             """
         }
         return requirements.get(language, "Follow language best practices and conventions")
-    
+
+    def _get_framework_context(self, state: Dict[str, Any]) -> str:
+        """Extract framework context from architecture translation."""
+        arch_translation = state.get('architecture_translation', {})
+
+        if not arch_translation:
+            return "No specific framework context available."
+
+        context_parts = []
+
+        # Target framework info
+        target_framework = arch_translation.get('target_framework', 'unknown')
+        context_parts.append(f"Target Framework: {target_framework}")
+
+        # Framework mappings for this translation
+        mappings = arch_translation.get('architectural_mappings', {})
+        if mappings:
+            context_parts.append("Pattern Mappings:")
+            for source_pattern, target_pattern in mappings.items():
+                context_parts.append(f"  {source_pattern} → {target_pattern}")
+
+        # Dependencies available
+        dependencies = arch_translation.get('dependencies', [])
+        if dependencies:
+            context_parts.append("Available Dependencies:")
+            for dep in dependencies[:5]:  # Limit to first 5
+                dep_name = dep.get('name', 'unknown') if isinstance(dep, dict) else str(dep)
+                purpose = dep.get('purpose', '') if isinstance(dep, dict) else ''
+                if purpose:
+                    context_parts.append(f"  {dep_name} - {purpose}")
+                else:
+                    context_parts.append(f"  {dep_name}")
+
+        # Migration notes
+        notes = arch_translation.get('migration_notes', [])
+        if notes:
+            context_parts.append("Migration Notes:")
+            for note in notes[:3]:  # Limit to first 3 notes
+                context_parts.append(f"  - {note}")
+
+        # Instructions based on framework
+        if target_framework:
+            context_parts.append(f"\nIMPORTANT: Generate code that integrates with {target_framework} framework.")
+            context_parts.append("Use framework-specific patterns, base classes, and conventions.")
+            context_parts.append("Ensure the translated code works with the generated project scaffolding.")
+
+        return "\n".join(context_parts)
+
     def _generate_imports(
         self, 
         spec: ModuleSpecification, 
@@ -462,3 +514,63 @@ class TranslatorAgent(BaseAgent):
                 }
             }
         }
+    def _get_architectural_context(self, spec: ModuleSpecification, state: Dict[str, Any]) -> Dict[str, Any]:
+        """Extract architectural context from module specification and workflow state."""
+        context = {
+            "architectural_context": None,
+            "deployment_pattern": None,
+            "scaling_characteristics": None,
+            "failure_tolerance": None,
+            "infrastructure_assumptions": [],
+            "domain_context": None
+        }
+        
+        # Extract from module specification if available
+        if hasattr(spec, 'architectural_context') and spec.architectural_context:
+            context["architectural_context"] = spec.architectural_context
+            
+        if hasattr(spec, 'deployment_pattern') and spec.deployment_pattern:
+            context["deployment_pattern"] = spec.deployment_pattern
+            
+        if hasattr(spec, 'scaling_characteristics') and spec.scaling_characteristics:
+            context["scaling_characteristics"] = spec.scaling_characteristics
+            
+        if hasattr(spec, 'failure_tolerance') and spec.failure_tolerance:
+            context["failure_tolerance"] = spec.failure_tolerance
+            
+        if hasattr(spec, 'infrastructure_assumptions') and spec.infrastructure_assumptions:
+            context["infrastructure_assumptions"] = spec.infrastructure_assumptions
+            
+        if hasattr(spec, 'domain_context') and spec.domain_context:
+            context["domain_context"] = spec.domain_context
+            
+        # Extract from workflow state if available
+        if state.get('project_spec'):
+            project_spec = state['project_spec']
+            if hasattr(project_spec, 'architectural_context') and project_spec.architectural_context:
+                context["architectural_context"] = project_spec.architectural_context
+                
+        return context
+
+    def _generate_context_guidance(self, architectural_context: Dict[str, Any], target_language: str) -> str:
+        """Generate context-aware guidance for translation based on architectural patterns."""
+        if not architectural_context or not any(architectural_context.values()):
+            return "No specific architectural context detected."
+        
+        guidance_parts = ["ARCHITECTURAL CONTEXT GUIDANCE:"]
+        
+        # Background job guidance
+        if architectural_context.get("architectural_context") == "background_job":
+            guidance_parts.append("BACKGROUND JOB PATTERN DETECTED:")
+            guidance_parts.append("- Use appropriate async/concurrent processing patterns")
+            guidance_parts.append("- Implement proper queue system integration")
+            guidance_parts.append("- Include retry mechanisms with exponential backoff")
+            guidance_parts.append("- Add graceful shutdown handling")
+            guidance_parts.append("- Include health monitoring and logging")
+            
+            if "redis" in architectural_context.get("infrastructure_assumptions", []):
+                guidance_parts.append("- Redis queue system detected")
+                if target_language == "go":
+                    guidance_parts.append("- Recommended Go libraries: github.com/go-redis/redis/v8")
+                    
+        return "\n".join(guidance_parts)
