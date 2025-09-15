@@ -140,8 +140,7 @@ python -m src PROJECT_ROOT TARGET_LANGUAGE --dry-run --log-level DEBUG
 
 **Options:**
 - `--config, -c`: Configuration file path (recommended for advanced features)
-- `--output, -o`: Output directory for translated code (default: "translated")  
-- `--review`: Enable human review before translation
+- `--output, -o`: Output directory for translated code (default: "translated")
 - `--log-level`: Logging level (DEBUG, INFO, WARNING, ERROR)
 - `--dry-run`: Analyze only, don't translate (useful for testing)
 - `--source-language`: Force source language detection (auto-detected if not specified)
@@ -159,8 +158,8 @@ python -m src /path/to/django-app javascript
 # Analyze a Java Spring project without translating
 python -m src /path/to/spring-project python --dry-run
 
-# Translate with human review and custom output location
-python -m src /path/to/project java --review --output /path/to/translated-code
+# Translate with custom output location
+python -m src /path/to/project java --output /path/to/translated-code
 
 # Use web-enabled agents for latest framework research
 python -m src /path/to/project python --config config-web.yaml
@@ -174,7 +173,6 @@ from src.orchestrator.hierarchical_workflow import HierarchicalCodebaseTranslato
 
 async def translate_codebase():
     config = {
-        'human_review': False,
         'output_path': 'translated',
         'documenter': {'model_name': 'claude-3-5-sonnet-20241022'},
         'translator': {'model_name': 'claude-3-5-sonnet-20241022'}
@@ -306,9 +304,8 @@ output_path: "translated"
 2. **Architecture Translation**: Detect source framework and generate target architecture scaffolding
 3. **Traverse**: Discover and catalog source files
 4. **Document**: Create language-agnostic specifications
-5. **Review** (optional): Human validation of specifications
-6. **Translate**: Generate target language code with framework context
-7. **Output**: Save translated files with proper structure and working project setup
+5. **Translate**: Generate target language code with framework context
+6. **Output**: Save translated files with proper structure and working project setup
 
 ## Testing
 

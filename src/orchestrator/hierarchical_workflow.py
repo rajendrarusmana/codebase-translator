@@ -117,7 +117,6 @@ class HierarchicalCodebaseTranslatorWorkflow:
         graph.add_node("analyze_functions", self._analyze_functions)
         graph.add_node("create_specifications", self._create_specifications)
         graph.add_node("translate_modules", self._translate_modules)
-        graph.add_node("human_review", self._human_review)
 
         # Define workflow edges
         graph.add_edge("project_analysis", "architecture_translation")
@@ -127,17 +126,8 @@ class HierarchicalCodebaseTranslatorWorkflow:
         graph.add_edge("extract_functions", "analyze_functions")
         graph.add_edge("analyze_functions", "create_specifications")
         
-        # Conditional review
-        graph.add_conditional_edges(
-            "create_specifications",
-            self._should_review,
-            {
-                "review": "human_review",
-                "translate": "translate_modules"
-            }
-        )
-        
-        graph.add_edge("human_review", "translate_modules")
+        # Direct translation after specifications
+        graph.add_edge("create_specifications", "translate_modules")
         # Connect translate_modules directly to END (removing Phase 8)
         graph.add_edge("translate_modules", END)
         
@@ -696,14 +686,6 @@ class HierarchicalCodebaseTranslatorWorkflow:
         
         return state
     
-    async def _human_review(self, state: OrchestratorState) -> OrchestratorState:
-        """Optional human review phase."""
-        logger.info("Human Review Phase")
-        state['phase'] = 'human_review'
-        
-        # Human review logic would go here
-        # For now, just continue
-        return state
     
     def _detect_language_from_path(self, file_path: str) -> str:
         """Detect programming language from file extension."""
@@ -725,12 +707,6 @@ class HierarchicalCodebaseTranslatorWorkflow:
         ext = Path(file_path).suffix
         return ext_mapping.get(ext, 'unknown')
     
-    def _should_review(self, state: OrchestratorState) -> str:
-        """Determine if human review is needed."""
-        config = state.get('config', {})
-        if config.get('human_review', False):
-            return "review"
-        return "translate"
     
     def _collect_errors(self, final_state: OrchestratorState) -> List[Dict[str, Any]]:
         """Collect all errors from the workflow."""

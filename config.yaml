@@ -1,28 +1,33 @@
 # Codebase Translator Configuration
 
 # Agent configurations
-# OpenRouter models can be specified as:
-# - "openrouter/meta-llama/llama-3.1-8b-instruct" 
-# - "or:meta-llama/llama-3.1-70b-instruct"
-# - Any model identifier from https://openrouter.ai/models
+# You can use any OpenAI-compatible model or OpenRouter models:
+# - "gpt-4" or "claude-3-5-sonnet-20241022" for OpenAI/Anthropic
+# - "openrouter/meta-llama/llama-3.1-8b-instruct" for OpenRouter
+# - "openrouter/anthropic/claude-3.5-sonnet" for OpenRouter
+
+project_analyzer:
+  model_name: "openrouter/qwen/qwen3-coder-30b-a3b-instruct"
+  temperature: 0.0
+
+architecture_translator:
+  model_name: "openrouter/qwen/qwen3-coder-30b-a3b-instruct"
+  temperature: 0.0
 
 traverser:
-  model_name: "openrouter/qwen/qwen3-coder-30b-a3b-instruct"  # Working Claude 3.5 Sonnet
+  model_name: "openrouter/qwen/qwen3-coder-30b-a3b-instruct"
   temperature: 0.0
 
 documenter:
-  model_name: "openrouter/qwen/qwen3-coder-30b-a3b-instruct"  # Best available for semantic analysis
+  model_name: "openrouter/qwen/qwen3-coder-30b-a3b-instruct"
   temperature: 0.0
 
 translator:
-  model_name: "openrouter/qwen/qwen3-coder-30b-a3b-instruct"  # Best available for code translation
+  model_name: "openrouter/qwen/qwen3-coder-30b-a3b-instruct"
   temperature: 0.1
 
 # Workflow settings
-human_review: false
-parallel_processing: true
-output_path: "translated"  # Default output root directory
-output_root: "translated"  # Root directory for organized project translations (same as output_path for backward compatibility)
+output_path: "translated"
 
 # Rate Limiting Configuration
 rate_limiting:
@@ -33,14 +38,14 @@ rate_limiting:
   max_retries: 3              # Maximum retry attempts
   max_tokens_per_request: 2000  # Limit output tokens per request
 
-# PostgreSQL Database Configuration
+# PostgreSQL Database Configuration (Optional)
 postgres:
-  enabled: true  # Set to true to enable PostgreSQL persistence
-  url: "postgresql://postgres:post@localhost:5432/codebase_translator"
+  enabled: false  # Set to true to enable PostgreSQL persistence
+  url: "postgresql://username:password@localhost:5432/codebase_translator"
   min_connections: 5
   max_connections: 20
   initialize_schema: true
-  schema_file: "src/persistence/schema_minimal.sql"
+  schema_file: "src/persistence/schema_simple.sql"
 
 # File processing settings
 max_file_size: 1048576  # 1MB in bytes
@@ -65,24 +70,20 @@ ignore_patterns:
   - "*.pyc"
   - "*.pyo"
 
-# Language-specific settings
+# Language-specific settings (Optional)
 language_settings:
   python:
     include_type_hints: true
-    format_with_black: true
-  
+    format_with_black: false
+
   javascript:
     use_es6: true
-    include_jsdoc: true
-  
+    include_jsdoc: false
+
   typescript:
     strict_mode: true
     include_interfaces: true
-  
+
   java:
     package_structure: true
-    include_javadoc: true
-  
-  go:
-    format_with_gofmt: true
-    include_godoc: true
+    include_javadoc: false

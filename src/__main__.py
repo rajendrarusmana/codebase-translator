@@ -39,7 +39,6 @@ def load_config(config_path: str = None) -> dict:
             'model_name': 'claude-3-5-sonnet-20241022',
             'temperature': 0.1
         },
-        'human_review': False,
         'output_path': 'translated',
         'parallel_processing': True,
         # PostgreSQL Database Configuration
@@ -110,7 +109,6 @@ Examples:
     parser.add_argument("--config", "-c", help="Path to configuration file")
     parser.add_argument("--output", "-o", help="Direct output directory for translated code")
     parser.add_argument("--output-root", help="Root directory for organized project translations (default: ./translated)")
-    parser.add_argument("--review", action="store_true", help="Enable human review before translation")
     parser.add_argument("--log-level", default="INFO", help="Logging level (DEBUG, INFO, WARNING, ERROR)")
     parser.add_argument("--dry-run", action="store_true", help="Analyze only, don't translate (useful for testing)")
     parser.add_argument("--source-language", help="Force source language detection (auto-detected if not specified)")
@@ -153,7 +151,6 @@ Examples:
         config = load_config(args.config)
         config.update({
             'output_path': args.output or args.output_root or 'translated',
-            'human_review': args.review,
             'dry_run': args.dry_run
         })
         
@@ -232,7 +229,6 @@ Examples:
         config.update({'output_path': './translated'})
     
     config.update({
-        'human_review': args.review,
         'dry_run': args.dry_run
     })
     
